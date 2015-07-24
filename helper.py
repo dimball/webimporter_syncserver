@@ -3,8 +3,14 @@ import select
 import json
 import logging
 class c_HelperFunctions():
-    def Helper(self):
-        print("test")
+    def m_Is_ID_In_List(self,list,ID):
+        self.bIsFound = False
+        for CheckID in list:
+            if CheckID == ID:
+                self.bIsFound = True
+                return True
+
+        return self.bIsFound
 class Client():
     def __init__(self, ip, port, Tasks):
         self.ip = ip

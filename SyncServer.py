@@ -31,6 +31,16 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
         #reorders the task list from incoming priority list array and then sets a flag to show that the list has changed and update is needed
         #prioritylist is an array of ID's
         Tasks.Order = prioritylist
+    def m_getpriority(self):
+        logging.debug("Sending task priority order")
+        #return the order of the tasks in the global list
+        self.Output = []
+        for ID in Tasks.Order:
+            self.TaskData = {}
+            self.TaskData["ID"] = ID
+            self.Output.append(self.TaskData)
+
+        self.request.sendall(bytes(json.dumps(self.Output),'utf-8'))
 
     # def setup(self):
     def handle(self):
@@ -42,14 +52,18 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
         self.Payload = self.data["payload"]
         self.Output = {}
 
-        if self.Command == "/webimporter/syncserver/v1/global/queue/task/put":
+        if self.Command == "/syncserver/v1/global/queue/task/put":
+            #when a new task is put into the global task list, then it needs to notify this to all registered clients (except for the one that sent the
+            #request in the first place.
+
             logging.debug("number of global tasks:%s", len(Tasks.Jobs))
             self.Payload = json.loads(self.Payload)
             if len(self.Payload)>0:
                 for data in self.Payload:
-                    Tasks.Order.append(data["ID"])
-                    Tasks.Jobs[data["ID"]] = dataclasses.c_Task()
-                    logging.debug("Adding a task to the global list from:%s", self.client_address[0])
+                    if not self.m_Is_ID_In_List(Tasks.Order,data["ID"]):
+                        Tasks.Order.append(data["ID"])
+                        Tasks.Jobs[data["ID"]] = dataclasses.c_Task()
+                        logging.debug("Adding a task to the global list from:%s", self.client_address[0])
 
             if len(Tasks.Jobs)>0:
                 for cl in Tasks.clientlist:
@@ -59,12 +73,14 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
                     self.Client.m_send(self.Client.m_create_data("/webimporter/v1/global/queue/put", self.Client.m_SerialiseSyncTasks()))
 
 
-        elif self.Command == "/webimporter/syncserver/v1/global/queue/task/get":
+        elif self.Command == "/syncserver/v1/global/queue/task/get":
             logging.debug("Sending tasks to client:%s", self.client_address[0])
 
-        elif self.Command == "/webimporter/syncserver/v1/global/queue/set_priority":
+        elif self.Command == "/syncserver/v1/global/queue/set_priority":
             logging.debug("Set priority list")
-        elif self.Command == "/webimporter/syncserver/v1/server/register":
+        elif self.Command == "/syncserver/v1/global/queue/get_priority":
+            self.m_getpriority()
+        elif self.Command == "/syncserver/v1/server/register":
             self.client = {}
             self.client["ip"] = self.client_address[0]
             self.client["port"] = int(self.Payload)
