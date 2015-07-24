@@ -95,7 +95,6 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
         elif self.Command == "/syncserver/v1/global/queue/set_priority":
             ############################ SET PRIORITY ############################
             logging.debug("Set priority list")
-            print(self.Payload)
             self.data = self.Payload
             Tasks.Order = []
             for Data in self.data:
