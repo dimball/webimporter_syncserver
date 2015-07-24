@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s',
                     )
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunctions):
+
     def m_add_task_to_list(self,ID,Payload):
         #adds a Task from a client into the global list.
         #Task only gets the data on progress, ID and metadata
@@ -41,6 +42,16 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
             self.Output.append(self.TaskData)
 
         self.request.sendall(bytes(json.dumps(self.Output),'utf-8'))
+    def m_setprogress(self,ID,progress):
+        logging.debug("Setting progress for:%s:%s",ID, progress)
+        Tasks.Jobs[ID].progress = progress
+        self.m_NotifyClients("/webimporter/v1/global/queue/put", self.m_SerialiseSyncTasks(Tasks, False))
+    def m_NotifyClients(self,command, payload):
+        for cl in Tasks.clientlist:
+            #if cl["ip"] == self.client_address[0]:
+            self.Client = hfn.Client(cl["ip"],cl["port"],Tasks)
+            logging.debug("Sending tasks to:%s", self.client_address[0])
+            self.Client.m_send(self.Client.m_create_data(command, payload))
 
     # def setup(self):
     def handle(self):
@@ -53,6 +64,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
         self.Output = {}
 
         if self.Command == "/syncserver/v1/global/queue/task/put":
+            ############################ PUT ON TASKLIST ############################
             #when a new task is put into the global task list, then it needs to notify this to all registered clients (except for the one that sent the
             #request in the first place.
 
@@ -63,24 +75,39 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
                     if not self.m_Is_ID_In_List(Tasks.Order,data["ID"]):
                         Tasks.Order.append(data["ID"])
                         Tasks.Jobs[data["ID"]] = dataclasses.c_Task()
+                        Tasks.Jobs[data["ID"]].progress = data["Data"]["progress"]
+                        Tasks.Jobs[data["ID"]].metadata = data["Data"]["metadata"]
                         logging.debug("Adding a task to the global list from:%s", self.client_address[0])
 
             if len(Tasks.Jobs)>0:
-                for cl in Tasks.clientlist:
-                    #if cl["ip"] == self.client_address[0]:
-                    self.Client = hfn.Client(cl["ip"],cl["port"],Tasks)
-                    logging.debug("Sending tasks to:%s", self.client_address[0])
-                    self.Client.m_send(self.Client.m_create_data("/webimporter/v1/global/queue/put", self.Client.m_SerialiseSyncTasks()))
+                self.m_NotifyClients("/webimporter/v1/global/queue/put", self.m_SerialiseSyncTasks(Tasks))
 
 
         elif self.Command == "/syncserver/v1/global/queue/task/get":
+            ############################ GET TASK  ############################
             logging.debug("Sending tasks to client:%s", self.client_address[0])
 
+        elif self.Command == "/syncserver/v1/global/queue/task/set_progress":
+            ############################ SET PROGRESS ############################
+            self.ID = self.Payload["ID"]
+            self.progress = self.Payload["progress"]
+            self.m_setprogress(self.ID,self.progress)
         elif self.Command == "/syncserver/v1/global/queue/set_priority":
+            ############################ SET PRIORITY ############################
             logging.debug("Set priority list")
+            print(self.Payload)
+            self.data = self.Payload
+            Tasks.Order = []
+            for Data in self.data:
+                Tasks.Order.append(Data)
+
+            self.m_NotifyClients("/webimporter/v1/local/queue/set_priority", Tasks.Order)
+
         elif self.Command == "/syncserver/v1/global/queue/get_priority":
+            ############################ GET PRIORITY ############################
             self.m_getpriority()
         elif self.Command == "/syncserver/v1/server/register":
+            ############################ REGISTER ############################
             self.client = {}
             self.client["ip"] = self.client_address[0]
             self.client["port"] = int(self.Payload)
@@ -94,8 +121,13 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler,hfn.c_HelperFunc
                 Tasks.clientlist.append(self.client)
             else:
                 logging.debug("[%s:%s]Client already exists", self.client_address[0],self.Payload)
-
-        elif self.Command == "/webimporter/syncserver/v1/server/shutdown":
+        elif self.Command == "/syncserver/v1/server/isconnected":
+            ############################ IS CONNECTED ############################
+            self.Output = {}
+            self.Output["status"] = "OK"
+            self.request.sendall(bytes(json.dumps(self.Output),'utf-8'))
+        elif self.Command == "/syncserver/v1/server/shutdown":
+            ############################ SHUTDOWN ############################
             logging.debug("Shutting down server")
             #go to each line manager and ask it to shut down
             Tasks.shutdown = True

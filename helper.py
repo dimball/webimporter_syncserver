@@ -11,23 +11,25 @@ class c_HelperFunctions():
                 return True
 
         return self.bIsFound
+    def m_SerialiseSyncTasks(self, Tasks, bReport=True):
+        self.output = []
+        for ID in Tasks.Order:
+            self.TaskData = {}
+            self.TaskData["ID"] = ID
+            self.TaskData["Data"] = {}
+            self.TaskData["report"] = bReport
+            self.TaskData["Data"]["type"] = Tasks.Jobs[ID].type
+            self.TaskData["Data"]["progress"] = Tasks.Jobs[ID].progress
+            self.TaskData["Data"]["metadata"] = Tasks.Jobs[ID].metadata
+            self.output.append(self.TaskData)
+
+        return json.dumps(self.output)
 class Client():
     def __init__(self, ip, port, Tasks):
         self.ip = ip
         self.port = port
         self.Tasks = Tasks
-    def m_SerialiseSyncTasks(self):
-        self.output = []
-        for ID in self.Tasks.Order:
-            self.TaskData = {}
-            self.TaskData["ID"] = ID
-            self.TaskData["Data"] = {}
-            self.TaskData["Data"]["type"] = self.Tasks.Jobs[ID].type
-            self.TaskData["Data"]["progress"] = self.Tasks.Jobs[ID].progress
-            self.TaskData["Data"]["metadata"] = self.Tasks.Jobs[ID].metadata
-            self.output.append(self.TaskData)
 
-        return json.dumps(self.output)
     def m_receive_all(self, sock):
         self.data = ""
         self.part = None
